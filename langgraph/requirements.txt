@@ -1,0 +1,8 @@
+langgraph
+langchain
+langchain_community
+ipykernel
+langchain_huggingface
+bs4
+chromadb
+tiktoken
