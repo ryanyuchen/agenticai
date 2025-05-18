@@ -1,8 +1,16 @@
 langgraph
 langchain
+langchain_openai 
 langchain_community
-ipykernel
+langchain_core
 langchain_huggingface
+pydantic
+python-dotenv
+ipykernel
+pypdf
 bs4
 chromadb
+faiss-cpu
 tiktoken
+fastapi
+uvicorn
