@@ -100,14 +100,15 @@ query_gen = query_gen_prompt | ChatOpenAI(model="gpt-4o", temperature=0).bind_to
 
 # Define the workflow
 from typing import Annotated, Literal
-from langchain_core.messages import AnyMessage, add_messages
+from typing import Any
+from langchain_core.messages import AIMessage, add_messages
 class State(TypedDict):
-    messages: Annotated[list[AnyMessage], add_messages]
+    messages: Annotated[list[AIMessage], add_messages]
 
-def first_tool_call(state: State) -> dict[str, list[AnyMessage]]:
+def first_tool_call(state: State) -> dict[str, list[AIMessage]]:
     return {
         "messages": [
-            AnyMessage(
+            AIMessage(
                 content="",
                 tool_calls=[
                     {
@@ -120,9 +121,24 @@ def first_tool_call(state: State) -> dict[str, list[AnyMessage]]:
         ]
     }
 
+# Handle error
 from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableLambda, RunnableWithFallbacks
 from langgraph.prebuilt import ToolNode
+from langgraph.graph import END, StateGraph, START
+
+def handle_tool_error(state) -> dict:
+    error = state.get("error")
+    tool_calls = state["messages"][-1].tool_calls
+    return {
+        "messages": [
+            ToolMessage(
+                content=f"Error: {repr(error)}\n please fix your mistakes.",
+                tool_call_id=tc["id"],
+            )
+            for tc in tool_calls
+        ]
+    }
 
 def create_tool_node_with_fallback(tools: list) -> RunnableWithFallbacks[Any, dict]:
     """
@@ -156,23 +172,6 @@ def model_check_query(state: State) -> dict[str, list[AIMessage]]:
     """
     return {"messages": [query_check.invoke({"messages": [state["messages"][-1]]})]}
 
-model_get_schema = ChatOpenAI(model="gpt-4o", temperature=0).bind_tools(
-    [get_schema_tool]
-)
-
-def handle_tool_error(state) -> dict:
-    error = state.get("error")
-    tool_calls = state["messages"][-1].tool_calls
-    return {
-        "messages": [
-            ToolMessage(
-                content=f"Error: {repr(error)}\n please fix your mistakes.",
-                tool_call_id=tc["id"],
-            )
-            for tc in tool_calls
-        ]
-    }
-
 def should_continue(state: State) -> Literal[END, "correct_query", "query_gen"]:
     messages = state["messages"]
     last_message = messages[-1]
@@ -184,7 +183,10 @@ def should_continue(state: State) -> Literal[END, "correct_query", "query_gen"]:
     else:
         return "correct_query"
 
-from langgraph.graph import END, StateGraph, START
+model_get_schema = ChatOpenAI(model="gpt-4o", temperature=0).bind_tools(
+    [get_schema_tool]
+)
+
 # Define a new graph
 workflow = StateGraph(State)
 
@@ -203,7 +205,6 @@ workflow.add_node("query_gen", query_gen_node)
 workflow.add_node("correct_query", model_check_query)
 workflow.add_node("execute_query", create_tool_node_with_fallback([db_query_tool]))
 
-# Specify the edges between the nodes
 workflow.add_edge(START, "first_tool_call")
 workflow.add_edge("first_tool_call", "list_tables_tool")
 workflow.add_edge("list_tables_tool", "model_get_schema")
@@ -219,6 +220,7 @@ workflow.add_edge("execute_query", "query_gen")
 # Compile the workflow into a runnable
 app = workflow.compile()
 
+# Dsiplay the graph
 from IPython.display import Image, display
 from langchain_core.runnables.graph import MermaidDrawMethod
 
