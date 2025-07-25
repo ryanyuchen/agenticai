@@ -1,3 +1,5 @@
+# reference code
+# https://medium.com/@hayagriva99999/building-a-powerful-sql-agent-with-langgraph-a-step-by-step-guide-part-2-24e818d47672
 # create db
 import sqlite3
 connection = sqlite3.connect("myemloyee.db")
